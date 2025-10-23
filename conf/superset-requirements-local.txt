@@ -1,0 +1,6 @@
+pyhive[hive]==0.7.0
+thrift==0.16.0
+thrift-sasl==0.4.3
+impyla==0.18.0
+psycopg2-binary==2.9.7
+sqlalchemy-hive==0.1.3

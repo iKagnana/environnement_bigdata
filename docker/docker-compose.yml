@@ -1,0 +1,178 @@
+version: "3.8"
+
+services:
+  # ==========
+  # PostgreSQL Database
+  # ==========
+  postgres:
+    image: postgres:15
+    container_name: chu-postgres-db
+    environment:
+      POSTGRES_DB: healthcare_data
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../datas/DATA2023:/data/DATA2023:ro
+    networks:
+      - spark-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin-web
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - spark-network
+
+  # ==========
+  # MinIO Object Storage as Data Lake
+  # ==========
+  minio:
+    image: minio/minio:latest
+    container_name: minio-storage
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - spark-network
+
+  # ==========
+  # Spark job runner
+  # ==========
+  spark-job:
+    container_name: spark-job-runner
+    build:
+      context: ..
+      dockerfile: docker/spark/Dockerfile
+    depends_on:
+      - spark-master
+      - minio
+    environment:
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin123
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - JOB_DIR=/opt/app/spark/jobs
+      - STARTUP_SLEEP=15
+    volumes:
+      - ../:/opt/app:ro                # monte tout environment_bigdata dans /opt/app (contient spark/jobs)
+      - ../datas:/opt/datas:ro  
+      - ./spark/jars:/opt/jars:ro      # jars delta / hadoop-aws (optionnel)
+    networks:
+      - spark-network
+    restart: "on-failure"
+
+  # ==========
+  # Spark Cluster and Thrift Server for Delta Lake Access
+  # ==========
+  spark-master:
+    image: apache/spark:3.4.1
+    container_name: spark-master-node
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    environment:
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    volumes:
+      - ../conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+    depends_on:
+      - minio
+    networks:
+      - spark-network
+
+  spark-worker:
+    image: apache/spark:3.4.1
+    container_name: spark-worker-node
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    environment:
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2g
+    depends_on:
+      - spark-master
+    networks:
+      - spark-network
+
+  spark-thrift:
+    image: apache/spark:3.4.1
+    container_name: spark-thrift-server
+    user: root
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        sleep 30
+        mkdir -p /tmp/spark-warehouse
+        /opt/spark/bin/spark-submit \
+          --class org.apache.spark.sql.hive.thriftserver.HiveThriftServer2 \
+          --master spark://spark-master:7077 \
+          --conf spark.sql.hive.thriftServer.singleSession=true \
+          --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+          --conf spark.sql.warehouse.dir=/tmp/spark-warehouse \
+          --conf spark.local.dir=/tmp \
+          --hiveconf hive.server2.thrift.port=10000 \
+          --hiveconf hive.server2.thrift.bind.host=0.0.0.0
+    ports:
+      - "10000:10000"
+    depends_on:
+      - spark-master
+      - spark-worker
+    networks:
+      - spark-network
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+
+  # ==========
+  # Apache Superset for Data Visualization
+  # ==========
+  superset:
+    build:
+      context: ..
+      dockerfile: docker/superset/Dockerfile
+    container_name: superset
+    depends_on:
+      - spark-thrift # Attend que Spark soit prêt
+    ports:
+      - "8088:8088" # Port par défaut de Superset
+    environment:
+      - SUPERSET_SECRET_KEY=3YLpq3ON/qk1iPLKRlU88FQSy1SDXCRGGS9FYYiR9cr0jcvaphgPQxcQ
+      - SUPERSET_CONFIG_PATH=/app/superset_config.py
+    networks:
+      - spark-network
+    volumes:
+      - superset_data:/app/superset_home # Stocke les dashboards
+      - ../conf/superset_config.py:/app/superset_config.py:ro
+
+networks:
+  spark-network:
+    driver: bridge
+
+volumes:
+  minio-data:
+  metabase-data:
+  postgres-data:
+  pgadmin-data:
+  superset_data:
