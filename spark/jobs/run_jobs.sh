@@ -3,6 +3,24 @@ set -euo pipefail
 
 sleep "${STARTUP_SLEEP:-5}"
 
+# Attendre que le Spark Master soit disponible sur le port 7077
+echo "⏳ Attente du Spark Master sur le port 7077..."
+max_retries=30
+count=0
+while [ $count -lt $max_retries ]; do
+  if timeout 2 bash -c "</dev/tcp/spark-master/7077" 2>/dev/null; then
+    echo "✅ Spark Master accessible sur le port 7077"
+    break
+  fi
+  echo "   Tentative $((count+1))/$max_retries..."
+  sleep 2
+  count=$((count + 1))
+done
+if [ $count -ge $max_retries ]; then
+  echo "❌ ERREUR: Spark Master non accessible après $((max_retries*2))s"
+  exit 1
+fi
+
 # Attendre que le master ait au moins 1 worker enregistré (timeout ≈ 60s)
 echo "⏳ Attente de l'enregistrement d'au moins 1 worker sur le master..."
 max_retries=20
@@ -19,7 +37,6 @@ done
 if [ $count -ge $max_retries ]; then
   echo "⚠️ Timeout: pas de worker enregistré après $((max_retries*3))s, on continue quand même"
 fi
-# ...existing code...
 
 SPARK_MASTER="${SPARK_MASTER_URL:-spark://spark-master:7077}"
 MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://minio:9000}"

@@ -66,16 +66,19 @@ services:
       context: ..
       dockerfile: docker/spark/Dockerfile
     depends_on:
-      - spark-master
-      - spark-worker
-      - minio
+      spark-master:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      spark-worker:
+        condition: service_started
     environment:
       - MINIO_ENDPOINT=http://minio:9000
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin123
       - SPARK_MASTER_URL=spark://spark-master:7077
       - JOB_DIR=/opt/app/spark/jobs
-      - STARTUP_SLEEP=15
+      - STARTUP_SLEEP=10
     volumes:
       - ../datas:/opt/app/datas:ro # Montage des données en lecture seule
       - ../spark:/opt/app/spark:ro # Monte seulement le répertoire spark (contient jobs/)
@@ -90,7 +93,7 @@ services:
   spark-master:
     build:
       context: ..
-      dockerfile: docker/spark/Dockerfile
+      dockerfile: docker/spark/Dockerfile.base
     container_name: spark-master-node
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     environment:
@@ -106,13 +109,19 @@ services:
       - ../datas:/opt/app/datas:ro # Montage des données en lecture seule
     depends_on:
       - minio
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - spark-network
 
   spark-worker:
     build:
       context: ..
-      dockerfile: docker/spark/Dockerfile
+      dockerfile: docker/spark/Dockerfile.base
     container_name: spark-worker-node
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     environment:
@@ -129,7 +138,7 @@ services:
   spark-thrift:
     build:
       context: ..
-      dockerfile: docker/spark/Dockerfile
+      dockerfile: docker/spark/Dockerfile.base
     container_name: spark-thrift-server
     user: root
     entrypoint: ["/bin/bash", "-c"]
