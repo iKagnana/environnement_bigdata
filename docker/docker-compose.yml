@@ -88,7 +88,9 @@ services:
   # Spark Cluster and Thrift Server for Delta Lake Access
   # ==========
   spark-master:
-    image: apache/spark:3.4.1
+    build:
+      context: ..
+      dockerfile: docker/spark/Dockerfile
     container_name: spark-master-node
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     environment:
@@ -108,7 +110,9 @@ services:
       - spark-network
 
   spark-worker:
-    image: apache/spark:3.4.1
+    build:
+      context: ..
+      dockerfile: docker/spark/Dockerfile
     container_name: spark-worker-node
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     environment:
@@ -123,7 +127,9 @@ services:
       - spark-network
 
   spark-thrift:
-    image: apache/spark:3.4.1
+    build:
+      context: ..
+      dockerfile: docker/spark/Dockerfile
     container_name: spark-thrift-server
     user: root
     entrypoint: ["/bin/bash", "-c"]
@@ -138,6 +144,8 @@ services:
           --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
           --conf spark.sql.warehouse.dir=/tmp/spark-warehouse \
           --conf spark.local.dir=/tmp \
+          --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
+          --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
           --hiveconf hive.server2.thrift.port=10000 \
           --hiveconf hive.server2.thrift.bind.host=0.0.0.0
     ports:
