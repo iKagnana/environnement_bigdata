@@ -19,10 +19,9 @@ CREATE TABLE IF NOT EXISTS delta.`s3a://chu/delta/dim_patient_partitionnee` (
     patient_id INT COMMENT 'Identifiant du patient',                            -- id_patient (Hospitalisations.csv), Patient.Id_patient
     sexe STRING COMMENT 'Sexe du patient',                                      -- Patient.Sexe
     date_naissance DATE COMMENT 'Date de naissance',                            -- Patient.Date
-    code_postal_residence STRING COMMENT 'Code postal de résidence'             -- Patient.Code_postal
 )
 USING DELTA
-PARTITIONED BY (code_postal_residence)
+PARTITIONED BY (date_naissance)
 LOCATION 's3a://chu/delta/dim_patient_partitionnee';
 
 -- Dimension des dates

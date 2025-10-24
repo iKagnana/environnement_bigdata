@@ -18,6 +18,9 @@ RUN curl -fsSL -o /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-am
 RUN mkdir -p /opt/app /opt/jars /opt/spark/scripts
 WORKDIR /opt/app
 
+# Copie datasets
+COPY datas/ /opt/app/datas/
+
 # Copier les jobs depuis le contexte (fallback si vous ne montez pas le repo)
 COPY spark/jobs /opt/app/spark/jobs
 # Copier le script d'exécution présent dans le contexte docker/spark/

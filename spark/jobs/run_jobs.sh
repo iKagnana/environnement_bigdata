@@ -1,7 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-sleep "${STARTUP_SLEEP:-15}"
+sleep "${STARTUP_SLEEP:-5}"
+
+# Attendre que le master ait au moins 1 worker enregistré (timeout ≈ 60s)
+echo "⏳ Attente de l'enregistrement d'au moins 1 worker sur le master..."
+max_retries=20
+count=0
+while [ $count -lt $max_retries ]; do
+  if curl -s http://spark-master:8080/json/ 2>/dev/null | grep -q '"workers":[^[]*' && \
+     ! curl -s http://spark-master:8080/json/ 2>/dev/null | grep -q '"workers":\[\]'; then
+    echo "✅ Worker(s) enregistré(s)"
+    break
+  fi
+  sleep 3
+  count=$((count + 1))
+done
+if [ $count -ge $max_retries ]; then
+  echo "⚠️ Timeout: pas de worker enregistré après $((max_retries*3))s, on continue quand même"
+fi
+# ...existing code...
 
 SPARK_MASTER="${SPARK_MASTER_URL:-spark://spark-master:7077}"
 MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://minio:9000}"
@@ -32,7 +50,6 @@ if [ ${#jobs[@]} -eq 0 ]; then
   echo "⚠️ Aucun job trouvé dans $JOB_DIR"
   exit 0
 fi
-
 for job in "${jobs[@]}"; do
   echo "----------------------------------------"
   echo "📄 Exécution du job: $job"
@@ -40,6 +57,8 @@ for job in "${jobs[@]}"; do
   /opt/spark/bin/spark-submit \
     --master "$SPARK_MASTER" \
     --deploy-mode client \
+    --executor-memory 1g \
+    --total-executor-cores 1 \
     --conf "spark.hadoop.fs.s3a.endpoint=${MINIO_ENDPOINT}" \
     --conf "spark.hadoop.fs.s3a.access.key=${MINIO_ACCESS_KEY}" \
     --conf "spark.hadoop.fs.s3a.secret.key=${MINIO_SECRET_KEY}" \

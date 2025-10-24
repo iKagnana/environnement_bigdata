@@ -57,7 +57,7 @@ Alternative si le fichier DATA2023 est dans un sous-dossier :
 4. Remplissez le formulaire avec les informations suivantes :
    - **Nom** : Spark Thrift
    - **Type** : Druid
-   - **URI** : `jdbc:hive2://spark-thrift-server:10000/default`
+   - **URI** : `hive://admin@spark-thrift-server:10000/default`
    - **Utilisateur** : `admin`
    - **Mot de passe** : `admin`
 5. Cliquez sur "Tester" pour vérifier la connexion, puis sur "Ajouter" pour enregistrer la base de données.

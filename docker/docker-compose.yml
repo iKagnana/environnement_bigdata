@@ -67,6 +67,7 @@ services:
       dockerfile: docker/spark/Dockerfile
     depends_on:
       - spark-master
+      - spark-worker
       - minio
     environment:
       - MINIO_ENDPOINT=http://minio:9000
@@ -76,9 +77,9 @@ services:
       - JOB_DIR=/opt/app/spark/jobs
       - STARTUP_SLEEP=15
     volumes:
-      - ../:/opt/app:ro                # monte tout environment_bigdata dans /opt/app (contient spark/jobs)
-      - ../datas:/opt/datas:ro  
-      - ./spark/jars:/opt/jars:ro      # jars delta / hadoop-aws (optionnel)
+      - ../datas:/opt/app/datas:ro # Montage des données en lecture seule
+      - ../spark:/opt/app/spark:ro # Monte seulement le répertoire spark (contient jobs/)
+      - ./spark/jars:/opt/jars:ro # jars delta / hadoop-aws (optionnel)
     networks:
       - spark-network
     restart: "on-failure"
@@ -99,6 +100,8 @@ services:
       - "8080:8080"
     volumes:
       - ../conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+      - ../spark:/opt/app/spark:ro # Monte seulement le répertoire spark (contient jobs/)
+      - ../datas:/opt/app/datas:ro # Montage des données en lecture seule
     depends_on:
       - minio
     networks:
@@ -111,6 +114,9 @@ services:
     environment:
       - SPARK_WORKER_CORES=2
       - SPARK_WORKER_MEMORY=2g
+    volumes:
+      - ../spark:/opt/app/spark:ro # Monte seulement le répertoire spark (contient jobs/)
+      - ../datas:/opt/app/datas:ro # Montage des données en lecture seule
     depends_on:
       - spark-master
     networks:
@@ -139,6 +145,7 @@ services:
     depends_on:
       - spark-master
       - spark-worker
+      - minio
     networks:
       - spark-network
     restart: unless-stopped
