@@ -74,8 +74,11 @@ for job in "${jobs[@]}"; do
   /opt/spark/bin/spark-submit \
     --master "$SPARK_MASTER" \
     --deploy-mode client \
+    --driver-memory 1g \
     --executor-memory 1g \
     --total-executor-cores 1 \
+    --conf "spark.driver.maxResultSize=512m" \
+    --conf "spark.python.worker.memory=512m" \
     --conf "spark.hadoop.fs.s3a.endpoint=${MINIO_ENDPOINT}" \
     --conf "spark.hadoop.fs.s3a.access.key=${MINIO_ACCESS_KEY}" \
     --conf "spark.hadoop.fs.s3a.secret.key=${MINIO_SECRET_KEY}" \
