@@ -18,6 +18,12 @@ RUN curl -fsSL -o /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-am
 RUN mkdir -p /opt/app /opt/jars /opt/spark/scripts
 WORKDIR /opt/app
 
+# Télécharger Delta Lake JAR compatible avec Spark 3.4.1 et Scala 2.12
+RUN curl -fsSL -o /opt/spark/jars/delta-core_2.12-2.4.0.jar \
+    https://repo1.maven.org/maven2/io/delta/delta-core_2.12/2.4.0/delta-core_2.12-2.4.0.jar \
+  && curl -fsSL -o /opt/spark/jars/delta-storage-2.4.0.jar \
+    https://repo1.maven.org/maven2/io/delta/delta-storage/2.4.0/delta-storage-2.4.0.jar
+
 # Copie datasets
 COPY datas/ /opt/app/datas/
 

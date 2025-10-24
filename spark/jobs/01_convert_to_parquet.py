@@ -26,7 +26,7 @@ def _parse_endpoint(endpoint: str):
     return host, secure
 
 def create_spark_session():
-    """Créer une session Spark configurée pour MinIO (s3a)"""
+    """Créer une session Spark configurée pour MinIO (s3a) et Delta Lake"""
     endpoint = os.environ.get("MINIO_ENDPOINT", "http://minio:9000")
     access_key = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
     secret_key = os.environ.get("MINIO_SECRET_KEY", "minioadmin123")
@@ -42,7 +42,9 @@ def create_spark_session():
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "true" if secure else "false") \
         .config("spark.sql.adaptive.enabled", "true") \
-        .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
+        .config("spark.sql.adaptive.coalescePartitions.enabled", "true") \
+        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
 
     return builder.getOrCreate()
 
