@@ -248,7 +248,7 @@ def build_faits_satisfaction(t):
         .select(
             F.col("etablissement_id").alias("fk_etablissement"),
             F.col("indicateur_id").alias("fk_indicateur"),
-            F.lit(int(date_2020_id)).alias("fk_date_mesure"),
+            F.lit(date_2020_id).cast("int").alias("fk_date_mesure"),
             F.col("score_all_rea_ajust").cast("float").alias("score_ajuste"),
             F.col("nb_rep_score_all_rea_ajust").alias("nombre_reponses"),
             F.col("taux_reco_brut").cast("float").alias("taux_participation")
@@ -266,7 +266,7 @@ def build_faits_satisfaction(t):
         .select(
             F.col("etablissement_id").alias("fk_etablissement"),
             F.col("indicateur_id").alias("fk_indicateur"),
-            F.lit(int(date_2020_id)).alias("fk_date_mesure"),
+            F.lit(date_2020_id).cast("int").alias("fk_date_mesure"),
             F.col("score_all_ajust").cast("float").alias("score_ajuste"),
             F.col("nb_rep_score_all_ajust").alias("nombre_reponses"),
             F.col("taux_reco_brut").cast("float").alias("taux_participation")
