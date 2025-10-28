@@ -14,14 +14,15 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     libssl-dev \
     pkg-config \
-    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
-# Copier le script d'initialisation
+# Copier les fichiers de configuration
+COPY conf/superset_config.py /app/pythonpath/superset_config.py
 COPY conf/scripts/init-superset.sh /app/init-superset.sh
 
-# Corriger le format et les permissions
-RUN dos2unix /app/init-superset.sh && chmod +x /app/init-superset.sh
+# Corriger le format et les permissions avec sed (pas besoin de dos2unix)
+RUN sed -i 's/\r$//' /app/init-superset.sh && \
+    chmod +x /app/init-superset.sh
 
 # Mise à jour de pip
 RUN pip install --upgrade pip
@@ -43,13 +44,17 @@ RUN pip install --no-cache-dir pyhive[hive]==0.7.0 || \
 RUN pip install --no-cache-dir impyla==0.18.0
 
 # Créer le répertoire de configuration
-RUN mkdir -p /app/pythonpath
+RUN mkdir -p /app/pythonpath /app/superset_home
 
 # Remettre les permissions correctes
 RUN chown -R superset:superset /app
 
 # Revenir à l'utilisateur superset
 USER superset
+
+# Variable d'environnement pour le fichier de config
+ENV SUPERSET_CONFIG_PATH=/app/pythonpath/superset_config.py
+ENV PYTHONPATH=/app/pythonpath:$PYTHONPATH
 
 # Point d'entrée par défaut
 ENTRYPOINT ["/app/init-superset.sh"]
