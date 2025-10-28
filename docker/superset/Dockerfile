@@ -52,4 +52,4 @@ RUN chown -R superset:superset /app
 USER superset
 
 # Point d'entrée par défaut
-CMD ["/app/init-superset.sh"]
+ENTRYPOINT ["/app/init-superset.sh"]

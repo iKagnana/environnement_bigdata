@@ -3,7 +3,7 @@ services:
   # PostgreSQL Database (pour les données healthcare ET le metastore Hive)
   # ==========
   postgres:
-    image: postgres:15
+    image: postgres:13
     container_name: chu-postgres-db
     environment:
       POSTGRES_DB: healthcare_data
@@ -14,8 +14,8 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ../datas/DATA2023:/data/DATA2023:ro
-      - ./init-scripts:/docker-entrypoint-initdb.d
-    networks:
+      - ../conf/scripts/init-postgresql.sql:/docker-entrypoint-initdb.d/init-postgresql.sql:ro  
+    networks:  
       - spark-network
 
   pgadmin:
@@ -224,7 +224,7 @@ services:
       - ../spark:/opt/app/spark:ro # Monte seulement le répertoire spark (contient jobs/)
       - ../conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
       - ../conf/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
-      - ../scripts/register_tables.py:/opt/scripts/register_tables.py:ro
+      - ../scripts/04_register_table_hive.py:/opt/scripts/register_tables.py:ro
     environment:
       REGISTER_TABLES_SCRIPT: /opt/scripts/register_tables.py
     depends_on:
@@ -258,7 +258,6 @@ services:
       - spark-network
     volumes:
       - superset_data:/app/superset_home
-      - ../conf/superset_config.py:/app/superset_config.py:ro
 
 networks:
   spark-network:
