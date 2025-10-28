@@ -145,47 +145,59 @@ services:
         sleep 30
         mkdir -p /tmp/spark-warehouse
           
-          # Attendre que les tables soient créées dans MinIO
-          echo "⏳ Attente de la création des tables..."
-          sleep 60
+        # Attendre que les tables soient créées dans MinIO
+        echo "⏳ Attente de la création des tables..."
+        sleep 60
           
-          # Exécuter le script d'enregistrement des tables
-          echo "🔗 Enregistrement des tables Delta dans le metastore..."
-          python3 /opt/app/spark/jobs/04_register_table_hive.py
-          
-          # Démarrer le Thrift Server
-          echo "🚀 Démarrage du Thrift Server..."
-          /opt/spark/bin/spark-submit \
-            --class org.apache.spark.sql.hive.thriftserver.HiveThriftServer2 \
-            --master spark://spark-master:7077 \
-            --packages io.delta:delta-core_2.12:2.4.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
-            --conf spark.sql.hive.thriftServer.singleSession=true \
-            --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
-            --conf spark.sql.warehouse.dir=s3a://healthcare-data/ \
-            --conf spark.local.dir=/tmp \
-            --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
-            --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
-            --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
-            --conf spark.hadoop.fs.s3a.access.key=minioadmin \
-            --conf spark.hadoop.fs.s3a.secret.key=minioadmin123 \
-            --conf spark.hadoop.fs.s3a.path.style.access=true \
-            --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
-            --conf spark.hadoop.fs.s3a.connection.ssl.enabled=false \
-            --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider \
-            --hiveconf hive.server2.thrift.port=10000 \
-            --hiveconf hive.server2.thrift.bind.host=0.0.0.0
+        # Exécuter le script d'enregistrement des tables avec spark-submit
+        echo "🔗 Enregistrement des tables Delta dans le metastore..."
+        /opt/spark/bin/spark-submit \
+          --master spark://spark-master:7077 \
+          --packages io.delta:delta-core_2.12:2.4.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
+          --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
+          --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
+          --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
+          --conf spark.hadoop.fs.s3a.access.key=minioadmin \
+          --conf spark.hadoop.fs.s3a.secret.key=minioadmin123 \
+          --conf spark.hadoop.fs.s3a.path.style.access=true \
+          --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
+          --conf spark.hadoop.fs.s3a.connection.ssl.enabled=false \
+          --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider \
+          /opt/app/spark/jobs/04_register_table_hive.py
+        
+        # Démarrer le Thrift Server
+        echo "🚀 Démarrage du Thrift Server..."
+        /opt/spark/bin/spark-submit \
+          --class org.apache.spark.sql.hive.thriftserver.HiveThriftServer2 \
+          --master spark://spark-master:7077 \
+          --packages io.delta:delta-core_2.12:2.4.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
+          --conf spark.sql.hive.thriftServer.singleSession=true \
+          --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+          --conf spark.sql.warehouse.dir=s3a://healthcare-data/ \
+          --conf spark.local.dir=/tmp \
+          --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
+          --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
+          --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
+          --conf spark.hadoop.fs.s3a.access.key=minioadmin \
+          --conf spark.hadoop.fs.s3a.secret.key=minioadmin123 \
+          --conf spark.hadoop.fs.s3a.path.style.access=true \
+          --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
+          --conf spark.hadoop.fs.s3a.connection.ssl.enabled=false \
+          --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider \
+          --hiveconf hive.server2.thrift.port=10000 \
+          --hiveconf hive.server2.thrift.bind.host=0.0.0.0
     ports:
       - "10000:10000"
     volumes:
+      - ../spark:/opt/app/spark:ro # Monte seulement le répertoire spark (contient jobs/)
       - ../conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
-      - ../scripts/register_tables.py:/opt/scripts/register_tables.py:ro  # fichier monté
     environment:
       REGISTER_TABLES_SCRIPT: /opt/scripts/register_tables.py              # chemin du script
     depends_on:
       - spark-master
       - spark-worker
       - minio
-      - spark-job
+      # - spark-job
     networks:
       - spark-network
     restart: unless-stopped
