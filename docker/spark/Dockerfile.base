@@ -19,11 +19,18 @@ RUN mkdir -p /opt/app /opt/jars /opt/spark/scripts
 WORKDIR /opt/app
 
 # Télécharger Delta Lake JAR compatible avec Spark 3.4.1 et Scala 2.12
-# Version 2.4.0 est compatible avec Spark 3.4.x
 RUN curl -fsSL -o /opt/spark/jars/delta-core_2.12-2.4.0.jar \
     https://repo1.maven.org/maven2/io/delta/delta-core_2.12/2.4.0/delta-core_2.12-2.4.0.jar \
   && curl -fsSL -o /opt/spark/jars/delta-storage-2.4.0.jar \
     https://repo1.maven.org/maven2/io/delta/delta-storage/2.4.0/delta-storage-2.4.0.jar
+
+# Télécharger les JARs Hadoop AWS pour le support S3/MinIO
+RUN curl -fsSL -o /opt/spark/jars/hadoop-aws-3.3.4.jar \
+    https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar \
+  && curl -fsSL -o /opt/spark/jars/aws-java-sdk-bundle-1.12.262.jar \
+    https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar \
+  && curl -fsSL -o /opt/spark/jars/hadoop-common-3.3.4.jar \
+    https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-common/3.3.4/hadoop-common-3.3.4.jar
 
 # Variables par défaut (peuvent être surchargées par docker-compose)
 ENV SPARK_MASTER_URL=spark://spark-master:7077 \
