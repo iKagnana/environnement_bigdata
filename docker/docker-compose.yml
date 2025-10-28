@@ -1,6 +1,6 @@
 services:
   # ==========
-  # PostgreSQL Database
+  # PostgreSQL Database (pour les données healthcare ET le metastore Hive)
   # ==========
   postgres:
     image: postgres:15
@@ -14,6 +14,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ../datas/DATA2023:/data/DATA2023:ro
+      - ./init-scripts:/docker-entrypoint-initdb.d
     networks:
       - spark-network
 
@@ -31,6 +32,30 @@ services:
       - postgres
     networks:
       - spark-network
+
+  # ==========
+  # Hive Metastore Service
+  # ==========
+  hive-metastore:
+    build:
+      context: ..
+      dockerfile: docker/hive/Dockerfile
+    container_name: hive-metastore
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=metastore
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+    ports:
+      - "9083:9083"
+    depends_on:
+      - postgres
+    volumes:
+      - ../conf/hive-site.xml:/opt/hive/conf/hive-site.xml:ro
+    networks:
+      - spark-network
+    restart: unless-stopped
 
   # ==========
   # MinIO Object Storage as Data Lake
@@ -70,17 +95,20 @@ services:
         condition: service_healthy
       spark-worker:
         condition: service_started
+      hive-metastore:
+        condition: service_started
     environment:
       - MINIO_ENDPOINT=http://minio:9000
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin123
       - SPARK_MASTER_URL=spark://spark-master:7077
       - JOB_DIR=/opt/app/spark/jobs
-      - STARTUP_SLEEP=10
+      - STARTUP_SLEEP=15
     volumes:
-      - ../datas:/opt/app/datas:ro # Montage des données en lecture seule
-      - ../spark:/opt/app/spark:ro # Monte seulement le répertoire spark (contient jobs/)
-      - ./spark/jars:/opt/jars:ro # jars delta / hadoop-aws (optionnel)
+      - ../datas:/opt/app/datas:ro
+      - ../spark:/opt/app/spark:ro
+      - ../conf/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
+      - ./spark/jars:/opt/jars:ro
     networks:
       - spark-network
     restart: "on-failure"
@@ -103,10 +131,12 @@ services:
       - "8080:8080"
     volumes:
       - ../conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
-      - ../spark:/opt/app/spark:ro # Monte seulement le répertoire spark (contient jobs/)
-      - ../datas:/opt/app/datas:ro # Montage des données en lecture seule
+      - ../conf/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
+      - ../spark:/opt/app/spark:ro
+      - ../datas:/opt/app/datas:ro
     depends_on:
       - minio
+      - hive-metastore
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 10s
@@ -126,10 +156,12 @@ services:
       - SPARK_WORKER_CORES=2
       - SPARK_WORKER_MEMORY=2g
     volumes:
-      - ../spark:/opt/app/spark:ro # Monte seulement le répertoire spark (contient jobs/)
-      - ../datas:/opt/app/datas:ro # Montage des données en lecture seule
+      - ../conf/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
+      - ../spark:/opt/app/spark:ro
+      - ../datas:/opt/app/datas:ro
     depends_on:
       - spark-master
+      - hive-metastore
     networks:
       - spark-network
 
@@ -191,13 +223,16 @@ services:
     volumes:
       - ../spark:/opt/app/spark:ro # Monte seulement le répertoire spark (contient jobs/)
       - ../conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+      - ../conf/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
+      - ../scripts/register_tables.py:/opt/scripts/register_tables.py:ro
     environment:
-      REGISTER_TABLES_SCRIPT: /opt/scripts/register_tables.py              # chemin du script
+      REGISTER_TABLES_SCRIPT: /opt/scripts/register_tables.py
     depends_on:
       - spark-master
       - spark-worker
       - minio
-      # - spark-job
+      - spark-job
+      - hive-metastore
     networks:
       - spark-network
     restart: unless-stopped
@@ -213,16 +248,16 @@ services:
       dockerfile: docker/superset/Dockerfile
     container_name: superset
     depends_on:
-      - spark-thrift # Attend que Spark soit prêt
+      - spark-thrift
     ports:
-      - "8088:8088" # Port par défaut de Superset
+      - "8088:8088"
     environment:
       - SUPERSET_SECRET_KEY=3YLpq3ON/qk1iPLKRlU88FQSy1SDXCRGGS9FYYiR9cr0jcvaphgPQxcQ
       - SUPERSET_CONFIG_PATH=/app/superset_config.py
     networks:
       - spark-network
     volumes:
-      - superset_data:/app/superset_home # Stocke les dashboards
+      - superset_data:/app/superset_home
       - ../conf/superset_config.py:/app/superset_config.py:ro
 
 networks:
