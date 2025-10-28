@@ -25,9 +25,7 @@ def create_spark_session():
     endpoint = os.environ.get("MINIO_ENDPOINT", "http://minio:9000")
     access_key = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
     secret_key = os.environ.get("MINIO_SECRET_KEY", "minioadmin123")
-
     host_port, secure = _parse_endpoint(endpoint)
-
     builder = SparkSession.builder \
         .appName("Create Delta Tables - Healthcare Data") \
         .config("spark.hadoop.fs.s3a.endpoint", f"http://{host_port}" if not secure else f"https://{host_port}") \
@@ -40,45 +38,35 @@ def create_spark_session():
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
         .config("spark.sql.adaptive.enabled", "true") \
         .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
-
     return builder.getOrCreate()
 
 def create_delta_table_safe(spark, table_name, schema, partition_by, path):
     """Créer une table Delta de manière sécurisée avec gestion d'erreur"""
     try:
         logger.info(f"Création de la table {table_name}...")
-
         # Créer un DataFrame vide avec le schéma - utiliser sparkContext directement
         # pour éviter les problèmes de sérialisation
         empty_rdd = spark.sparkContext.emptyRDD()
         df = spark.createDataFrame(empty_rdd, schema)
-
         writer = df.write.format("delta").mode("ignore").option("overwriteSchema", "true")
-
         if partition_by:
             if isinstance(partition_by, list):
                 writer = writer.partitionBy(*partition_by)
             else:
                 writer = writer.partitionBy(partition_by)
-
         writer.save(path)
-        logger.info(f"✅ Table {table_name} créée avec succès")
+        logger.info(f"___Table {table_name} créée avec succès___")
         return True
     except Exception as e:
-        logger.error(f"❌ Erreur lors de la création de {table_name}: {str(e)}")
+        logger.error(f"___Erreur lors de la création de {table_name}: {str(e)}___")
         import traceback
         logger.error(traceback.format_exc())
         return False
 
 def create_delta_tables(spark):
     """Créer toutes les tables Delta selon le schéma défini"""
-    logger.info("🚀 Création des tables Delta Healthcare...")
-
+    logger.info("___Création des tables Delta Healthcare...___")
     tables_config = []
-
-    # =================================
-    # TABLES DE DIMENSIONS
-    # =================================
 
     # Dimension des lieux
     tables_config.append({
@@ -86,9 +74,7 @@ def create_delta_tables(spark):
         "schema": StructType([
             StructField("lieu_id", IntegerType(), True),
             StructField("commune", StringType(), True),
-            StructField("departement", StringType(), True),
-            StructField("region", StringType(), True),
-            StructField("pays", StringType(), True)
+            StructField("region", StringType(), True)
         ]),
         "partition_by": "region",
         "path": "s3a://healthcare-data/gold/dim_lieu"
@@ -130,9 +116,7 @@ def create_delta_tables(spark):
         "schema": StructType([
             StructField("etablissement_id", IntegerType(), True),
             StructField("raison_sociale", StringType(), True),
-            StructField("adresse", StringType(), True),
             StructField("commune", StringType(), True),
-            StructField("code_postal", StringType(), True),
             StructField("region", StringType(), True)
         ]),
         "partition_by": "region",
@@ -156,10 +140,9 @@ def create_delta_tables(spark):
         "name": "dim_indicateur",
         "schema": StructType([
             StructField("indicateur_id", IntegerType(), True),
-            StructField("libelle_indicateur", StringType(), True),
-            StructField("categorie_indicateur", StringType(), True)
+            StructField("libelle_indicateur", StringType(), True)
         ]),
-        "partition_by": "categorie_indicateur",
+        "partition_by": "libelle_indicateur",
         "path": "s3a://healthcare-data/gold/dim_indicateur"
     })
 
@@ -178,18 +161,13 @@ def create_delta_tables(spark):
         "path": "s3a://healthcare-data/gold/dim_professionel"
     })
 
-    # =================================
-    # TABLES DE FAITS
-    # =================================
-
     # Fait décès
     tables_config.append({
         "name": "fait_deces",
         "schema": StructType([
-            StructField("fk_patient", IntegerType(), True),
+            StructField("id_mort", IntegerType(), True),
             StructField("fk_date_deces", IntegerType(), True),
             StructField("fk_lieu_deces", IntegerType(), True),
-            StructField("fk_lieu_naissance", IntegerType(), True),
             StructField("nb_deces", IntegerType(), True),
             StructField("annee", IntegerType(), True)
         ]),
@@ -222,10 +200,9 @@ def create_delta_tables(spark):
             StructField("fk_date_mesure", IntegerType(), True),
             StructField("score_ajuste", FloatType(), True),
             StructField("nombre_reponses", IntegerType(), True),
-            StructField("taux_participation", FloatType(), True),
-            StructField("annee", IntegerType(), True)
+            StructField("taux_participation", FloatType(), True)
         ]),
-        "partition_by": "annee",
+        "partition_by": "fk_indicateur",
         "path": "s3a://healthcare-data/gold/fait_satisfaction"
     })
 
@@ -238,7 +215,6 @@ def create_delta_tables(spark):
             StructField("fk_date_consultation", IntegerType(), True),
             StructField("fk_diagnostic", StringType(), True),
             StructField("fk_etablissement", IntegerType(), True),
-            StructField("duree_consultation_minutes", IntegerType(), True),
             StructField("nb_consultations", IntegerType(), True),
             StructField("annee", IntegerType(), True)
         ]),
@@ -246,10 +222,9 @@ def create_delta_tables(spark):
         "path": "s3a://healthcare-data/gold/fait_consultations"
     })
 
-    # Créer toutes les tables
+    # Création des tables
     success_count = 0
     failed_count = 0
-
     for table_config in tables_config:
         if create_delta_table_safe(
             spark,
@@ -263,17 +238,15 @@ def create_delta_tables(spark):
             failed_count += 1
 
     logger.info("=" * 60)
-    logger.info(f"✅ Tables créées avec succès: {success_count}")
-    logger.info(f"❌ Tables échouées: {failed_count}")
-    logger.info(f"📊 Total: {success_count + failed_count}")
+    logger.info(f"___Tables créées avec succès: {success_count}___")
+    logger.info(f"___Tables échouées: {failed_count}___")
+    logger.info(f"___Total: {success_count + failed_count}___")
     logger.info("=" * 60)
-
     return success_count, failed_count
 
 def verify_tables(spark):
     """Vérifier que toutes les tables ont été créées"""
-    logger.info("🔍 Vérification des tables créées...")
-
+    logger.info("___Vérification des tables créées...___")
     tables = [
         ("dim_lieu", "s3a://healthcare-data/gold/dim_lieu"),
         ("dim_patient", "s3a://healthcare-data/gold/dim_patient"),
@@ -287,46 +260,37 @@ def verify_tables(spark):
         ("fait_satisfaction", "s3a://healthcare-data/gold/fait_satisfaction"),
         ("fait_consultations", "s3a://healthcare-data/gold/fait_consultations")
     ]
-
     verified_count = 0
     for table_name, table_path in tables:
         try:
             df = spark.read.format("delta").load(table_path)
             col_count = len(df.columns)
             row_count = df.count()
-            logger.info(f"✅ Table {table_name}: {col_count} colonnes, {row_count} lignes")
+            logger.info(f"___Table {table_name}: {col_count} colonnes, {row_count} lignes___")
             verified_count += 1
         except Exception as e:
-            logger.error(f"❌ Erreur pour la table {table_name}: {str(e)}")
-
-    logger.info(f"📊 Tables vérifiées: {verified_count}/{len(tables)}")
+            logger.error(f"___Erreur pour la table {table_name}: {str(e)}___")
+    logger.info(f"___Tables vérifiées: {verified_count}/{len(tables)}___")
 
 def main():
     """Fonction principale pour créer les tables Delta"""
     spark = None
-
     try:
-        logger.info("🚀 Début de la création des tables Delta Healthcare...")
-
+        logger.info("___Début de la création des tables Delta Healthcare...___")
         # Créer la session Spark
         spark = create_spark_session()
-
         # Créer toutes les tables
         success_count, failed_count = create_delta_tables(spark)
-
         # Vérifier les tables créées seulement si tout s'est bien passé
         if failed_count == 0:
             verify_tables(spark)
-
-        logger.info("🎉 Création des tables Delta terminée!")
-
+        logger.info("___Création des tables Delta terminée!___")
         # Retourner un code de sortie approprié
         if failed_count > 0:
             import sys
             sys.exit(1)
-
     except Exception as e:
-        logger.error(f"💥 Erreur lors de la création des tables: {str(e)}")
+        logger.error(f"___Erreur lors de la création des tables: {str(e)}___")
         import traceback
         logger.error(traceback.format_exc())
         import sys
