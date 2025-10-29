@@ -80,6 +80,22 @@ services:
     networks:
       - spark-network
 
+  trino:
+    environment:
+      - TRINO_HADOOP_CONF_DIR=/etc/trino/hadoop
+    image: trinodb/trino:latest
+    container_name: trino
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./trino/config:/etc/trino:ro
+      - ./trino/config/hadoop:/etc/trino/hadoop:ro
+    depends_on:
+      - hive-metastore
+      - minio
+    networks:
+      - spark-network
+
   # ==========
   # Spark job runner
   # ==========
@@ -109,6 +125,8 @@ services:
       - ../spark:/opt/app/spark:ro
       - ../conf/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
       - ./spark/jars:/opt/jars:ro
+      - ../spark/jobs/run_jobs.sh:/opt/app/run_jobs.sh:ro
+    entrypoint: ["/bin/bash", "/opt/app/run_jobs.sh"]
     networks:
       - spark-network
     restart: "on-failure"
@@ -269,3 +287,4 @@ volumes:
   postgres-data:
   pgadmin-data:
   superset_data:
+  trino-data:

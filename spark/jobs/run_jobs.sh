@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-sleep "${STARTUP_SLEEP:-5}"
-
 # Attendre que le Spark Master soit disponible sur le port 7077
 echo "⏳ Attente du Spark Master sur le port 7077..."
 max_retries=30
@@ -27,7 +25,7 @@ max_retries=20
 count=0
 while [ $count -lt $max_retries ]; do
   if curl -s http://spark-master:8080/json/ 2>/dev/null | grep -q '"workers":[^[]*' && \
-     ! curl -s http://spark-master:8080/json/ 2>/dev/null | grep -q '"workers":\[\]'; then
+    ! curl -s http://spark-master:8080/json/ 2>/dev/null | grep -q '"workers":\[\]'; then
     echo "✅ Worker(s) enregistré(s)"
     break
   fi
