@@ -75,6 +75,7 @@ for job in "${jobs[@]}"; do
     --driver-memory 1g \
     --executor-memory 1g \
     --total-executor-cores 1 \
+    --packages io.delta:delta-core_2.12:2.4.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
     --conf "spark.driver.maxResultSize=512m" \
     --conf "spark.python.worker.memory=512m" \
     --conf "spark.hadoop.fs.s3a.endpoint=${MINIO_ENDPOINT}" \
@@ -82,8 +83,11 @@ for job in "${jobs[@]}"; do
     --conf "spark.hadoop.fs.s3a.secret.key=${MINIO_SECRET_KEY}" \
     --conf "spark.hadoop.fs.s3a.path.style.access=true" \
     --conf "spark.hadoop.fs.s3a.connection.ssl.enabled=false" \
+    --conf "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem" \
+    --conf "spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider" \
     --conf "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension" \
     --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog" \
+    --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
     $( [ -n "$JARS" ] && echo --jars "$JARS" ) \
     "$job"
   rc=$?

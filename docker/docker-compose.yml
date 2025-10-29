@@ -124,7 +124,7 @@ services:
       - ../datas:/opt/app/datas:ro
       - ../spark:/opt/app/spark:ro
       - ../conf/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
-      - ./spark/jars:/opt/jars:ro
+      - ../conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
       - ../spark/jobs/run_jobs.sh:/opt/app/run_jobs.sh:ro
     entrypoint: ["/bin/bash", "/opt/app/run_jobs.sh"]
     networks:
@@ -175,6 +175,7 @@ services:
       - SPARK_WORKER_MEMORY=2g
     volumes:
       - ../conf/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
+      - ../conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
       - ../spark:/opt/app/spark:ro
       - ../datas:/opt/app/datas:ro
     depends_on:
