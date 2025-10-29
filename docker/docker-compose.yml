@@ -14,8 +14,8 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ../datas/DATA2023:/data/DATA2023:ro
-      - ../conf/scripts/init-postgresql.sql:/docker-entrypoint-initdb.d/init-postgresql.sql:ro  
-    networks:  
+      - ../conf/scripts/init-postgresql.sql:/docker-entrypoint-initdb.d/init-postgresql.sql:ro
+    networks:
       - spark-network
 
   pgadmin:
@@ -168,7 +168,7 @@ services:
   spark-thrift:
     build:
       context: ..
-      dockerfile: docker/spark/Dockerfile.base
+      dockerfile: docker/spark/thrift/Dockerfile
     container_name: spark-thrift-server
     user: root
     entrypoint: ["/bin/bash", "-c"]
@@ -196,7 +196,7 @@ services:
           --conf spark.hadoop.fs.s3a.connection.ssl.enabled=false \
           --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider \
           /opt/app/spark/jobs/04_register_table_hive.py
-        
+
         # Démarrer le Thrift Server
         echo "🚀 Démarrage du Thrift Server..."
         /opt/spark/bin/spark-submit \
@@ -231,7 +231,6 @@ services:
       - spark-master
       - spark-worker
       - minio
-      - spark-job
       - hive-metastore
     networks:
       - spark-network
