@@ -41,12 +41,24 @@ def load_silver_tables(spark):
     return tables
 
 # Ecriture des DataFrames au format Delta dans S3
-def write_delta(df, path, partition_col):
+def write_delta(df, path, partition_col=None):
     writer = df.write.format("delta").mode("overwrite")
-    if partition_col:
-        writer = writer.partitionBy(partition_col)
-        writer.save(path)
-        logger.info(f"___Table Delta écrite : {path}____")
+    
+    # Ne partitionner QUE si c'est vraiment utile
+    if partition_col and isinstance(partition_col, str):
+        # Vérifier qu'il y a assez de données pour justifier le partitionnement
+        count = df.count()
+        distinct_partitions = df.select(partition_col).distinct().count()
+        
+        # Ne partitionner que si > 10000 lignes ET < 100 partitions
+        if count > 10000 and distinct_partitions < 100:
+            writer = writer.partitionBy(partition_col)
+            logger.info(f"   Partitionnement par {partition_col} ({distinct_partitions} partitions)")
+    
+    # TOUJOURS sauvegarder (en dehors du if)
+    writer.save(path)
+    logger.info(f"✅ Table Delta écrite : {path}")
+
 
 # Construction des tables de dimensions
 def build_dimension_lieu(t):
@@ -162,7 +174,7 @@ def build_dimension_diagnostic(t):
         )
         .distinct()
     )
-    write_delta(dim_diagnostic, "s3a://healthcare-data/gold/dim_diagnostic", "categorie_diagnostic")
+    write_delta(dim_diagnostic, "s3a://healthcare-data/gold/dim_diagnostic")
 
 def build_dimension_professionnel(t):
     logger.info("____Création de la dimension des professionnels...____")
@@ -177,7 +189,7 @@ def build_dimension_professionnel(t):
             "specialite"
         )
     )
-    write_delta(dim_professionel, "s3a://healthcare-data/gold/dim_professionel", ["profession", "specialite"])
+    write_delta(dim_professionel, "s3a://healthcare-data/gold/dim_professionel", None)
 
 def build_dimension_indicateur(t):
     logger.info("____Création de la dimension des indicateurs...____")
@@ -193,7 +205,7 @@ def build_dimension_indicateur(t):
         T.StructField("libelle_indicateur", T.StringType(), False)
     ])
     dim_indicateur = spark.createDataFrame(indicateurs, schema=schema)
-    write_delta(dim_indicateur, "s3a://healthcare-data/gold/dim_indicateur", "libelle_indicateur")
+    write_delta(dim_indicateur, "s3a://healthcare-data/gold/dim_indicateur", None)
 
 def build_faits_deces(t):
     logger.info("____Création du fait des décès...____")
@@ -277,7 +289,7 @@ def build_faits_satisfaction(t):
         fait_satisfaction_esatis
         .unionByName(fait_satisfaction_esatisca)
     )
-    write_delta(fait_satisfaction, "s3a://healthcare-data/gold/fait_satisfaction", "fk_indicateur")
+    write_delta(fait_satisfaction, "s3a://healthcare-data/gold/fait_satisfaction", None)
 
 def build_faits_consultation(t):
     logger.info("____Création du fait des consultations...____")

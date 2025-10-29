@@ -15,7 +15,10 @@ echo "🏠 Spark Home: $SPARK_HOME"
 
 # Liste des jobs à exécuter dans l'ordre
 JOBS=(
+    "02_create_star_table.py"
+    "03_gold_jobs.py"
     "04_register_table_hive.py"
+    "05_migrate_to_s3.py"
 )
 
 for job in "${JOBS[@]}"; do

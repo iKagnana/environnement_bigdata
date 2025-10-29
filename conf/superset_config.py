@@ -9,11 +9,6 @@ SQLALCHEMY_DATABASE_URI = 'sqlite:////app/superset_home/superset.db'
 # Disable CSRF protection for API calls (for development only)
 WTF_CSRF_ENABLED = False
 
-# Enable feature flags
-FEATURE_FLAGS = {
-    'ENABLE_TEMPLATE_PROCESSING': True,
-}
-
 # Cache configuration
 CACHE_CONFIG = {
     'CACHE_TYPE': 'simple',
@@ -24,5 +19,17 @@ SQLLAB_ASYNC_TIME_LIMIT_SEC = 300
 SQLLAB_TIMEOUT = 300
 SUPERSET_WEBSERVER_TIMEOUT = 300
 
+# Enable proxy fix for running behind reverse proxy
+ENABLE_PROXY_FIX = True
+
 # Allow additional database engines
 ADDITIONAL_MODULE_DS_MAP = {}
+
+# Feature flags
+FEATURE_FLAGS = {
+    'ENABLE_TEMPLATE_PROCESSING': True,
+    'SQLLAB_BACKEND_PERSISTENCE': True,
+}
+
+# Allowed database engines
+ALLOWED_EXTRA_SCHEMAS = ['hive', 'system']
