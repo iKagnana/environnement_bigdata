@@ -183,7 +183,7 @@ def build_dimension_professionnel(t):
     dim_professionel = (
         t["professionnel_sante"]
         .select(
-            col("id_prof_sante").cast("int").alias("professionnel_id"),
+            col("id_prof_sante").alias("professionnel_id"),
             "nom", 
             "prenom", 
             "civilite", 
@@ -300,7 +300,7 @@ def build_faits_consultation(t):
         .join(t["professionnel_sante"], "id_prof_sante", "left")
         .join(t["activite_professionel"], "id_prof_sante", "left")
         .withColumn("fk_patient", col("id_patient"))
-        .withColumn("fk_professionnel", col("id_prof_sante").cast("int"))
+        .withColumn("fk_professionnel", col("id_prof_sante"))
         .withColumn("fk_date_consultation", (year("date")*10000 + month("date")*100 + dayofmonth("date")))
         .withColumn("fk_diagnostic", col("code_diag"))
         .withColumn("fk_etablissement", col("id_etablissement"))

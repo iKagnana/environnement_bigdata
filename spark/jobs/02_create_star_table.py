@@ -152,7 +152,7 @@ def create_delta_tables(spark):
     tables_config.append({
         "name": "dim_professionel",
         "schema": StructType([
-            StructField("professionnel_id", IntegerType(), True),
+            StructField("professionnel_id", StringType(), True),
             StructField("nom", StringType(), True),
             StructField("prenom", StringType(), True),
             StructField("civilite", StringType(), True),
@@ -213,7 +213,7 @@ def create_delta_tables(spark):
         "name": "fait_consultations",
         "schema": StructType([
             StructField("fk_patient", IntegerType(), True),
-            StructField("fk_professionnel", IntegerType(), True),
+            StructField("fk_professionnel", StringType(), True),
             StructField("fk_date_consultation", IntegerType(), True),
             StructField("fk_diagnostic", StringType(), True),
             StructField("fk_etablissement", StringType(), True),
