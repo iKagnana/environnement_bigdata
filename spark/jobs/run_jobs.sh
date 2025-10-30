@@ -15,6 +15,7 @@ echo "🏠 Spark Home: $SPARK_HOME"
 
 # Liste des jobs à exécuter dans l'ordre
 JOBS=(
+    "01_convert_to_parquet.py"
     "02_create_star_table.py"
     "03_gold_jobs.py"
     "04_register_table_hive.py"

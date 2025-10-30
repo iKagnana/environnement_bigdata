@@ -74,7 +74,8 @@ def create_delta_tables(spark):
         "schema": StructType([
             StructField("lieu_id", IntegerType(), True),
             StructField("commune", StringType(), True),
-            StructField("region", StringType(), True)
+            StructField("region", StringType(), True),
+            StructField("iso", StringType(), True)
         ]),
         "partition_by": "region",
         "path": "s3a://healthcare-data/gold/dim_lieu"
@@ -114,10 +115,11 @@ def create_delta_tables(spark):
     tables_config.append({
         "name": "dim_etablissement",
         "schema": StructType([
-            StructField("etablissement_id", IntegerType(), True),
+            StructField("etablissement_id", StringType(), True),
             StructField("raison_sociale", StringType(), True),
             StructField("commune", StringType(), True),
-            StructField("region", StringType(), True)
+            StructField("region", StringType(), True),
+            StructField("finess", StringType(), True)
         ]),
         "partition_by": "region",
         "path": "s3a://healthcare-data/gold/dim_etablissement"
