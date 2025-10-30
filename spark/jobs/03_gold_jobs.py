@@ -227,7 +227,7 @@ def build_faits_hospitalisation(t):
     fait_hospitalisation = (
         t["hospitalisation"]
         .withColumn("fk_patient", col("id_patient"))
-        .withColumn("fk_etablissement", col("id_etablissement").cast("int"))
+        .withColumn("fk_etablissement", col("id_etablissement"))
         .withColumn("fk_diagnostic", col("code_diag"))
         .withColumn("fk_date_entree", (year("date")*10000 + month("date")*100 + dayofmonth("date")))
         .withColumn("duree_sejour_jours", col("duree"))
@@ -303,7 +303,7 @@ def build_faits_consultation(t):
         .withColumn("fk_professionnel", col("id_prof_sante").cast("int"))
         .withColumn("fk_date_consultation", (year("date")*10000 + month("date")*100 + dayofmonth("date")))
         .withColumn("fk_diagnostic", col("code_diag"))
-        .withColumn("fk_etablissement", col("id_etablissement").cast("int"))
+        .withColumn("fk_etablissement", col("id_etablissement"))
         .withColumn("nb_consultations", lit(1))
         .withColumn("annee", year("date"))
         .select("fk_patient","fk_professionnel","fk_date_consultation","fk_diagnostic","fk_etablissement","nb_consultations","annee")
