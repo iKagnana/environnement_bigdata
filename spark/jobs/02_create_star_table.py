@@ -76,7 +76,8 @@ def create_delta_tables(spark):
         "schema": StructType([
             StructField("lieu_id", IntegerType(), True),
             StructField("commune", StringType(), True),
-            StructField("region", StringType(), True)
+            StructField("region", StringType(), True),
+            StructField("iso", StringType(), True)
         ]),
         "partition_by": "region",
         "path": "s3a://healthcare-data/gold/dim_lieu"
@@ -116,10 +117,11 @@ def create_delta_tables(spark):
     tables_config.append({
         "name": "dim_etablissement",
         "schema": StructType([
-            StructField("etablissement_id", IntegerType(), True),
+            StructField("etablissement_id", StringType(), True),
             StructField("raison_sociale", StringType(), True),
             StructField("commune", StringType(), True),
-            StructField("region", StringType(), True)
+            StructField("region", StringType(), True),
+            StructField("finess", StringType(), True)
         ]),
         "partition_by": "region",
         "path": "s3a://healthcare-data/gold/dim_etablissement"
@@ -152,7 +154,7 @@ def create_delta_tables(spark):
     tables_config.append({
         "name": "dim_professionel",
         "schema": StructType([
-            StructField("professionnel_id", IntegerType(), True),
+            StructField("professionnel_id", StringType(), True),
             StructField("nom", StringType(), True),
             StructField("prenom", StringType(), True),
             StructField("civilite", StringType(), True),
@@ -182,7 +184,7 @@ def create_delta_tables(spark):
         "name": "fait_hospitalisation",
         "schema": StructType([
             StructField("fk_patient", IntegerType(), True),
-            StructField("fk_etablissement", IntegerType(), True),
+            StructField("fk_etablissement", StringType(), True),
             StructField("fk_diagnostic", StringType(), True),
             StructField("fk_date_entree", IntegerType(), True),
             StructField("duree_sejour_jours", IntegerType(), True),
@@ -197,7 +199,7 @@ def create_delta_tables(spark):
     tables_config.append({
         "name": "fait_satisfaction",
         "schema": StructType([
-            StructField("fk_etablissement", IntegerType(), True),
+            StructField("fk_etablissement", StringType(), True),
             StructField("fk_indicateur", IntegerType(), True),
             StructField("fk_date_mesure", IntegerType(), True),
             StructField("score_ajuste", FloatType(), True),
@@ -213,10 +215,10 @@ def create_delta_tables(spark):
         "name": "fait_consultations",
         "schema": StructType([
             StructField("fk_patient", IntegerType(), True),
-            StructField("fk_professionnel", IntegerType(), True),
+            StructField("fk_professionnel", StringType(), True),
             StructField("fk_date_consultation", IntegerType(), True),
             StructField("fk_diagnostic", StringType(), True),
-            StructField("fk_etablissement", IntegerType(), True),
+            StructField("fk_etablissement", StringType(), True),
             StructField("nb_consultations", IntegerType(), True),
             StructField("annee", IntegerType(), True)
         ]),

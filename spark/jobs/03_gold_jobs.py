@@ -17,18 +17,18 @@ def load_silver_tables(spark):
     logger.info("____Chargement des tables Silver depuis MinIO...____")
     base_path = "s3a://healthcare-data/silver/"
     paths = {
-        "consultations":            f"{base_path}silver_consultation_consultation",
-        "diagnostic":               f"{base_path}silver_consultation_diagnostic",
-        "patient":                  f"{base_path}silver_consultation_patient",
-        "deces":                    f"{base_path}silver_deces_deces",
-        "activite_professionel":    f"{base_path}silver_etablissement_sante_activite_professionnel_sante",
-        "etablissement_sante":      f"{base_path}silver_etablissement_sante_etablissement_sante",
-        "professionnel_sante":      f"{base_path}silver_etablissement_sante_professionnel_sante",
-        "hospitalisation":          f"{base_path}silver_hospitalisation_hospitalisation",
-        "region":                   f"{base_path}silver_localisation_regions",
-        "communes":                 f"{base_path}silver_localisation_communes",
-        "satisfaction_esatis":      f"{base_path}silver_satisfaction_esatis48h_2020",
-        "satisfaction_esatisca":    f"{base_path}silver_satisfaction_esatisca_2020",
+        "consultations":            f"{base_path}consultation_consultation",
+        "diagnostic":               f"{base_path}consultation_diagnostic",
+        "patient":                  f"{base_path}consultation_patient",
+        "deces":                    f"{base_path}deces_deces",
+        "activite_professionel":    f"{base_path}etablissement_sante_activite_professionnel_sante",
+        "etablissement_sante":      f"{base_path}etablissement_sante_etablissement_sante",
+        "professionnel_sante":      f"{base_path}etablissement_sante_professionnel_sante",
+        "hospitalisation":          f"{base_path}hospitalisation_hospitalisation",
+        "region":                   f"{base_path}localisation_regions",
+        "communes":                 f"{base_path}localisation_communes",
+        "satisfaction_esatis":      f"{base_path}satisfaction_esatis48h_2020",
+        "satisfaction_esatisca":    f"{base_path}satisfaction_esatisca_2020",
     }
     tables = {}
     for name, path in paths.items():
@@ -41,12 +41,24 @@ def load_silver_tables(spark):
     return tables
 
 # Ecriture des DataFrames au format Delta dans S3
-def write_delta(df, path, partition_col):
-    writer = df.write.format("delta").mode("overwrite")
-    if partition_col:
-        writer = writer.partitionBy(partition_col)
-        writer.save(path)
-        logger.info(f"___Table Delta écrite : {path}____")
+def write_delta(df, path, partition_col=None):
+    writer = df.write.format("delta").mode("overwrite").option("overwriteSchema", "true").option("mergeSchema", "true")
+    
+    # Ne partitionner QUE si c'est vraiment utile
+    if partition_col and isinstance(partition_col, str):
+        # Vérifier qu'il y a assez de données pour justifier le partitionnement
+        count = df.count()
+        distinct_partitions = df.select(partition_col).distinct().count()
+        
+        # Ne partitionner que si > 10000 lignes ET < 100 partitions
+        if count > 10000 and distinct_partitions < 100:
+            writer = writer.partitionBy(partition_col)
+            logger.info(f"   Partitionnement par {partition_col} ({distinct_partitions} partitions)")
+    
+    # TOUJOURS sauvegarder (en dehors du if)
+    writer.save(path)
+    logger.info(f"✅ Table Delta écrite : {path}")
+
 
 # Construction des tables de dimensions
 def build_dimension_lieu(t):
@@ -54,14 +66,15 @@ def build_dimension_lieu(t):
     dim_lieu = (
         t["communes"]
         .join(
-            t["region"].select("code_region", "region"),
+            t["region"].select("code_region", "region", "iso"),
             on="code_region",
             how="left"
         )
         .select(
             monotonically_increasing_id().cast("integer").alias("lieu_id"),
             col("code_commune").alias("commune"),
-            col("region")
+            col("region"),
+            col("iso")
         )
         .distinct()
     )
@@ -136,10 +149,11 @@ def build_dimension_etablissement(t):
             how="left"
         )
         .select(
-            col("id_etablissement").cast("integer").alias("etablissement_id"),
+            col("id_etablissement").alias("etablissement_id"),
             col("raison_sociale").alias("raison_sociale"),
             col("code_commune").alias("commune"),
-            col("region")
+            col("region"),
+            col("finess").alias("finess")
         )
         .distinct()
     )
@@ -162,14 +176,14 @@ def build_dimension_diagnostic(t):
         )
         .distinct()
     )
-    write_delta(dim_diagnostic, "s3a://healthcare-data/gold/dim_diagnostic", "categorie_diagnostic")
+    write_delta(dim_diagnostic, "s3a://healthcare-data/gold/dim_diagnostic")
 
 def build_dimension_professionnel(t):
     logger.info("____Création de la dimension des professionnels...____")
     dim_professionel = (
         t["professionnel_sante"]
         .select(
-            col("id_prof_sante").cast("int").alias("professionnel_id"),
+            col("id_prof_sante").alias("professionnel_id"),
             "nom", 
             "prenom", 
             "civilite", 
@@ -177,7 +191,7 @@ def build_dimension_professionnel(t):
             "specialite"
         )
     )
-    write_delta(dim_professionel, "s3a://healthcare-data/gold/dim_professionel", ["profession", "specialite"])
+    write_delta(dim_professionel, "s3a://healthcare-data/gold/dim_professionel", None)
 
 def build_dimension_indicateur(t):
     logger.info("____Création de la dimension des indicateurs...____")
@@ -193,7 +207,7 @@ def build_dimension_indicateur(t):
         T.StructField("libelle_indicateur", T.StringType(), False)
     ])
     dim_indicateur = spark.createDataFrame(indicateurs, schema=schema)
-    write_delta(dim_indicateur, "s3a://healthcare-data/gold/dim_indicateur", "libelle_indicateur")
+    write_delta(dim_indicateur, "s3a://healthcare-data/gold/dim_indicateur", None)
 
 def build_faits_deces(t):
     logger.info("____Création du fait des décès...____")
@@ -213,7 +227,7 @@ def build_faits_hospitalisation(t):
     fait_hospitalisation = (
         t["hospitalisation"]
         .withColumn("fk_patient", col("id_patient"))
-        .withColumn("fk_etablissement", col("id_etablissement").cast("int"))
+        .withColumn("fk_etablissement", col("id_etablissement"))
         .withColumn("fk_diagnostic", col("code_diag"))
         .withColumn("fk_date_entree", (year("date")*10000 + month("date")*100 + dayofmonth("date")))
         .withColumn("duree_sejour_jours", col("duree"))
@@ -234,7 +248,7 @@ def build_faits_satisfaction(t):
     date_2020_id = dim_date.filter(F.col("annee") == 2020).select("date_id").first()["date_id"]
     # Table réduite pour la FK établissement
     dim_etablissement_fk = dim_etablissement.select(
-        F.col("etablissement_id"), F.col("raison_sociale")
+        F.col("etablissement_id"), F.col("raison_sociale"), F.col("finess")
     )
     # Transformation esatis (48h)
     fait_satisfaction_esatis = (
@@ -243,7 +257,7 @@ def build_faits_satisfaction(t):
         .join(dim_indicateur.select("indicateur_id", "libelle_indicateur"),
             on="libelle_indicateur", how="inner")
         .join(dim_etablissement_fk,
-            t["satisfaction_esatis"]["nom_etablissement"] == dim_etablissement_fk["raison_sociale"],
+            t["satisfaction_esatis"]["finess"] == dim_etablissement_fk["finess"],
             "left")
         .select(
             F.col("etablissement_id").alias("fk_etablissement"),
@@ -261,7 +275,7 @@ def build_faits_satisfaction(t):
         .join(dim_indicateur.select("indicateur_id", "libelle_indicateur"),
             on="libelle_indicateur", how="inner")
         .join(dim_etablissement_fk,
-            t["satisfaction_esatisca"]["nom_etablissement"] == dim_etablissement_fk["raison_sociale"],
+            t["satisfaction_esatisca"]["finess"] == dim_etablissement_fk["finess"],
             "left")
         .select(
             F.col("etablissement_id").alias("fk_etablissement"),
@@ -277,7 +291,7 @@ def build_faits_satisfaction(t):
         fait_satisfaction_esatis
         .unionByName(fait_satisfaction_esatisca)
     )
-    write_delta(fait_satisfaction, "s3a://healthcare-data/gold/fait_satisfaction", "fk_indicateur")
+    write_delta(fait_satisfaction, "s3a://healthcare-data/gold/fait_satisfaction", None)
 
 def build_faits_consultation(t):
     logger.info("____Création du fait des consultations...____")
@@ -286,10 +300,10 @@ def build_faits_consultation(t):
         .join(t["professionnel_sante"], "id_prof_sante", "left")
         .join(t["activite_professionel"], "id_prof_sante", "left")
         .withColumn("fk_patient", col("id_patient"))
-        .withColumn("fk_professionnel", col("id_prof_sante").cast("int"))
+        .withColumn("fk_professionnel", col("id_prof_sante"))
         .withColumn("fk_date_consultation", (year("date")*10000 + month("date")*100 + dayofmonth("date")))
         .withColumn("fk_diagnostic", col("code_diag"))
-        .withColumn("fk_etablissement", col("id_etablissement").cast("int"))
+        .withColumn("fk_etablissement", col("id_etablissement"))
         .withColumn("nb_consultations", lit(1))
         .withColumn("annee", year("date"))
         .select("fk_patient","fk_professionnel","fk_date_consultation","fk_diagnostic","fk_etablissement","nb_consultations","annee")

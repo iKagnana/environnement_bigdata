@@ -1,103 +1,68 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-# Attendre que le Spark Master soit disponible sur le port 7077
-echo "⏳ Attente du Spark Master sur le port 7077..."
-max_retries=30
-count=0
-while [ $count -lt $max_retries ]; do
-  if timeout 2 bash -c "</dev/tcp/spark-master/7077" 2>/dev/null; then
-    echo "✅ Spark Master accessible sur le port 7077"
-    break
-  fi
-  echo "   Tentative $((count+1))/$max_retries..."
-  sleep 2
-  count=$((count + 1))
-done
-if [ $count -ge $max_retries ]; then
-  echo "❌ ERREUR: Spark Master non accessible après $((max_retries*2))s"
-  exit 1
-fi
+echo "⏳ Waiting ${STARTUP_SLEEP:-15} seconds for services to be ready..."
+sleep ${STARTUP_SLEEP:-15}
 
-# Attendre que le master ait au moins 1 worker enregistré (timeout ≈ 60s)
-echo "⏳ Attente de l'enregistrement d'au moins 1 worker sur le master..."
-max_retries=20
-count=0
-while [ $count -lt $max_retries ]; do
-  if curl -s http://spark-master:8080/json/ 2>/dev/null | grep -q '"workers":[^[]*' && \
-    ! curl -s http://spark-master:8080/json/ 2>/dev/null | grep -q '"workers":\[\]'; then
-    echo "✅ Worker(s) enregistré(s)"
-    break
-  fi
-  sleep 3
-  count=$((count + 1))
-done
-if [ $count -ge $max_retries ]; then
-  echo "⚠️ Timeout: pas de worker enregistré après $((max_retries*3))s, on continue quand même"
-fi
+MASTER_URL=${SPARK_MASTER_URL:-spark://spark-master:7077}
+JOB_DIR=${JOB_DIR:-/opt/app/spark/jobs}
+SPARK_HOME=${SPARK_HOME:-/opt/spark}
 
-SPARK_MASTER="${SPARK_MASTER_URL:-spark://spark-master:7077}"
-MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://minio:9000}"
-MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-minioadmin}"
-MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-minioadmin123}"
-JOB_DIR="${JOB_DIR:-/opt/app/spark/jobs}"
+echo "🚀 Starting Spark jobs execution..."
+echo "📍 Master URL: $MASTER_URL"
+echo "📁 Job directory: $JOB_DIR"
+echo "🏠 Spark Home: $SPARK_HOME"
 
-# Liste des jars (optionnel)
-JARS=$(ls /opt/jars/*.jar 2>/dev/null | paste -sd, - || echo "")
+# Liste des jobs à exécuter dans l'ordre
+JOBS=(
+    "01_convert_to_parquet.py"
+    "02_create_star_table.py"
+    "03_gold_jobs.py"
+    "04_register_table_hive.py"
+    "05_migrate_to_s3.py"
+)
 
-echo "🚀 Spark job runner"
-echo " - Spark master: $SPARK_MASTER"
-echo " - MinIO endpoint: $MINIO_ENDPOINT"
-echo " - Job dir: $JOB_DIR"
-echo " - JARS: ${JARS:-(none)}"
-
-# If mc is installed, configure alias and ensure bucket exists (no-fail)
-if command -v mc >/dev/null 2>&1; then
-  echo "🔧 Configuring mc alias for MinIO"
-  mc alias set minio "${MINIO_ENDPOINT}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}" --api S3v4 --insecure 2>/dev/null || true
-  # adjust bucket name as needed (here 'healthcare-data')
-  mc ls minio/healthcare-data >/dev/null 2>&1 || mc mb --insecure minio/healthcare-data >/dev/null 2>&1 || true
-fi
-
-shopt -s nullglob
-jobs=("$JOB_DIR"/*.py)
-if [ ${#jobs[@]} -eq 0 ]; then
-  echo "⚠️ Aucun job trouvé dans $JOB_DIR"
-  exit 0
-fi
-for job in "${jobs[@]}"; do
-  echo "----------------------------------------"
-  echo "📄 Exécution du job: $job"
-  set +e
-  /opt/spark/bin/spark-submit \
-    --master "$SPARK_MASTER" \
-    --deploy-mode client \
-    --driver-memory 1g \
-    --executor-memory 1g \
-    --total-executor-cores 1 \
-    --packages io.delta:delta-core_2.12:2.4.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
-    --conf "spark.driver.maxResultSize=512m" \
-    --conf "spark.python.worker.memory=512m" \
-    --conf "spark.hadoop.fs.s3a.endpoint=${MINIO_ENDPOINT}" \
-    --conf "spark.hadoop.fs.s3a.access.key=${MINIO_ACCESS_KEY}" \
-    --conf "spark.hadoop.fs.s3a.secret.key=${MINIO_SECRET_KEY}" \
-    --conf "spark.hadoop.fs.s3a.path.style.access=true" \
-    --conf "spark.hadoop.fs.s3a.connection.ssl.enabled=false" \
-    --conf "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem" \
-    --conf "spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider" \
-    --conf "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension" \
-    --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog" \
-    --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
-    $( [ -n "$JARS" ] && echo --jars "$JARS" ) \
-    "$job"
-  rc=$?
-  set -e
-  if [ $rc -ne 0 ]; then
-    echo "❌ Job failed: $job (exit $rc)"
-    # continuer avec les autres jobs (ne pas exit pour batch complet)
-  else
-    echo "✅ Job terminé: $job"
-  fi
+for job in "${JOBS[@]}"; do
+    job_path="$JOB_DIR/$job"
+    
+    if [ -f "$job_path" ]; then
+        echo ""
+        echo "════════════════════════════════════════════"
+        echo "🔄 Executing: $job"
+        echo "════════════════════════════════════════════"
+        
+        $SPARK_HOME/bin/spark-submit \
+            --master $MASTER_URL \
+            --deploy-mode client \
+            --conf spark.hadoop.fs.s3a.endpoint=${MINIO_ENDPOINT:-http://minio:9000} \
+            --conf spark.hadoop.fs.s3a.access.key=${MINIO_ACCESS_KEY:-minioadmin} \
+            --conf spark.hadoop.fs.s3a.secret.key=${MINIO_SECRET_KEY:-minioadmin123} \
+            --conf spark.hadoop.fs.s3a.path.style.access=true \
+            --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
+            --conf spark.hadoop.fs.s3a.connection.ssl.enabled=false \
+            --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
+            --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
+            --conf spark.sql.catalogImplementation=hive \
+            --conf spark.hadoop.hive.metastore.uris=thrift://hive-metastore:9083 \
+            --packages io.delta:delta-core_2.12:2.4.0 \
+            "$job_path"
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ $job completed successfully"
+        else
+            echo "❌ $job failed with exit code $?"
+            exit 1
+        fi
+    else
+        echo "⚠️  Job file not found: $job_path"
+    fi
 done
 
-echo "🎉 Tous les jobs traités"
+echo ""
+echo "════════════════════════════════════════════"
+echo "✅ All jobs completed successfully!"
+echo "════════════════════════════════════════════"
+
+# Garder le conteneur actif pour le debugging
+echo "💤 Keeping container alive for monitoring..."
+tail -f /dev/null

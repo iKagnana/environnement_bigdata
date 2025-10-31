@@ -132,7 +132,7 @@ services:
     restart: "on-failure"
 
   # ==========
-  # Spark Cluster and Thrift Server for Delta Lake Access
+  # Spark Cluster
   # ==========
   spark-master:
     build:
@@ -184,78 +184,37 @@ services:
     networks:
       - spark-network
 
-  spark-thrift:
-    build:
-      context: ..
-      dockerfile: docker/spark/Dockerfile.base
-    container_name: spark-thrift-server
-    user: root
-    entrypoint: ["/bin/bash", "-c"]
-    command:
-      - |
-        sleep 30
-        mkdir -p /tmp/spark-warehouse
-          
-        # Attendre que les tables soient créées dans MinIO
-        echo "⏳ Attente de la création des tables..."
-        sleep 60
-          
-        # Exécuter le script d'enregistrement des tables avec spark-submit
-        echo "🔗 Enregistrement des tables Delta dans le metastore..."
-        /opt/spark/bin/spark-submit \
-          --master spark://spark-master:7077 \
-          --packages io.delta:delta-core_2.12:2.4.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
-          --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
-          --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
-          --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
-          --conf spark.hadoop.fs.s3a.access.key=minioadmin \
-          --conf spark.hadoop.fs.s3a.secret.key=minioadmin123 \
-          --conf spark.hadoop.fs.s3a.path.style.access=true \
-          --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
-          --conf spark.hadoop.fs.s3a.connection.ssl.enabled=false \
-          --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider \
-          /opt/app/spark/jobs/04_register_table_hive.py
-        
-        # Démarrer le Thrift Server
-        echo "🚀 Démarrage du Thrift Server..."
-        /opt/spark/bin/spark-submit \
-          --class org.apache.spark.sql.hive.thriftserver.HiveThriftServer2 \
-          --master spark://spark-master:7077 \
-          --packages io.delta:delta-core_2.12:2.4.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
-          --conf spark.sql.hive.thriftServer.singleSession=true \
-          --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
-          --conf spark.sql.warehouse.dir=s3a://healthcare-data/ \
-          --conf spark.local.dir=/tmp \
-          --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
-          --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
-          --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
-          --conf spark.hadoop.fs.s3a.access.key=minioadmin \
-          --conf spark.hadoop.fs.s3a.secret.key=minioadmin123 \
-          --conf spark.hadoop.fs.s3a.path.style.access=true \
-          --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
-          --conf spark.hadoop.fs.s3a.connection.ssl.enabled=false \
-          --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider \
-          --hiveconf hive.server2.thrift.port=10000 \
-          --hiveconf hive.server2.thrift.bind.host=0.0.0.0
+  # ==========
+  # Trino Query Engine (remplace Spark Thrift Server)
+  # ==========
+  trino:
+    image: trinodb/trino:latest
+    container_name: trino-coordinator
     ports:
-      - "10000:10000"
+      - "8090:8080"
     volumes:
-      - ../spark:/opt/app/spark:ro # Monte seulement le répertoire spark (contient jobs/)
-      - ../conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
-      - ../conf/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
-      - ../scripts/04_register_table_hive.py:/opt/scripts/register_tables.py:ro
-    environment:
-      REGISTER_TABLES_SCRIPT: /opt/scripts/register_tables.py
+      - ../conf/trino/node.properties:/etc/trino/node.properties:ro
+      - ../conf/trino/config.properties:/etc/trino/config.properties:ro
+      - ../conf/trino/jvm.config:/etc/trino/jvm.config:ro
+      - ../conf/trino/core-site.xml:/etc/trino/core-site.xml:ro
+      - ../conf/trino/catalog/hive.properties:/etc/trino/catalog/hive.properties:ro
+      - ../conf/trino/catalog/delta.properties:/etc/trino/catalog/delta.properties:ro
+      - trino-data:/data/trino
     depends_on:
-      - spark-master
-      - spark-worker
-      - minio
-      - spark-job
-      - hive-metastore
+      hive-metastore:
+        condition: service_started
+      minio:
+        condition: service_healthy
     networks:
       - spark-network
-    tmpfs:
-      - /tmp
+    environment:
+      - TRINO_ENVIRONMENT=production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # ==========
   # Apache Superset for Data Visualization
@@ -266,7 +225,7 @@ services:
       dockerfile: docker/superset/Dockerfile
     container_name: superset
     depends_on:
-      - spark-thrift
+      - trino
     ports:
       - "8088:8088"
     environment:

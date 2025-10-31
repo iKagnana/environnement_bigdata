@@ -10,7 +10,7 @@ En ce qui concerne les technologies utilisées dans notre architecture, nous avo
 - **MinIO** : pour le stockage d'objets, simulant un data lake.
 - **Delta Lake** : pour le stockage de données en format open-source optimisé pour les workloads Big Data.
 - **Apache Spark** : pour le traitement distribué des données.
-  - **Spark Thrift Server** : pour permettre aux outils BI de se connecter à Spark via JDBC/ODBC.
+  - **Trino** : pour permettre aux outils BI de se connecter à Spark via JDBC/ODBC.
 - **Apache Superset** : pour la visualisation et l'analyse des données.
 
 ![architecture projet](./documentation/schemas/architecture_projet.png)
@@ -46,8 +46,8 @@ Cette architecture permet de répondre aux besoins utilisateurs suivants :
 Alternative si le fichier DATA2023 est dans un sous-dossier :
 `docker exec postgres-db pg_restore -U postgres -d healthcare_data -v --no-owner --no-acl "/data/DATA2023/BDD PostgreSQL/DATA2023"`
 
-## Connecter Apache Superset au Spark Thrift Server
-*Pour connecter Apache Superset au Spark Thrift Server afin de visualiser les données traitées par Spark.*
+## Connecter Apache Superset à Trino
+*Pour connecter Apache Superset à Trino afin de visualiser les données traitées par Spark.*
 
 1. Accédez à l'interface web d'Apache Superset en ouvrant votre navigateur et en allant à l'adresse `http://localhost:8088`.
 
@@ -55,9 +55,9 @@ Alternative si le fichier DATA2023 est dans un sous-dossier :
 3. Cliquez sur l'icône "+" dans le menu latéral gauche, puis sélectionnez "Bases de données".
 ![Ajouter une base de données](./documentation/demo_superset/install/first_step.png)
 4. Remplissez le formulaire avec les informations suivantes :
-   - **Nom** : Spark Thrift
+   - **Nom** : Trino
    - **Type** : Druid
-   - **URI** : `hive://admin@spark-thrift-server:10000/default`
+   - **URI** : `trino://admin@trino:8080/delta/healthcares`
    - **Utilisateur** : `admin`
    - **Mot de passe** : `admin`
-5. Cliquez sur "Tester" pour vérifier la connexion, puis sur "Ajouter" pour enregistrer la base de données.
+1. Cliquez sur "Tester" pour vérifier la connexion, puis sur "Ajouter" pour enregistrer la base de données.
