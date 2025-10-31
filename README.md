@@ -46,8 +46,8 @@ Cette architecture permet de répondre aux besoins utilisateurs suivants :
 Alternative si le fichier DATA2023 est dans un sous-dossier :
 `docker exec postgres-db pg_restore -U postgres -d healthcare_data -v --no-owner --no-acl "/data/DATA2023/BDD PostgreSQL/DATA2023"`
 
-## Connecter Apache Superset au Spark Thrift Server
-*Pour connecter Apache Superset au Spark Thrift Server afin de visualiser les données traitées par Spark.*
+## Connecter Apache Superset à Trino
+*Pour connecter Apache Superset à Trino afin de visualiser les données traitées par Spark.*
 
 1. Accédez à l'interface web d'Apache Superset en ouvrant votre navigateur et en allant à l'adresse `http://localhost:8088`.
 
